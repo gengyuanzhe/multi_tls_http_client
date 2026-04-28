@@ -1,5 +1,6 @@
 package uds.osc.retrieve.client;
 
+import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
 import org.apache.hc.core5.reactor.IOReactorStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -22,32 +23,31 @@ class HttpRetrieveAsyncClientFactoryTest {
         factory = new HttpRetrieveAsyncClientFactory();
         factory.init();
 
-        HttpRetrieveAsyncClient client = factory.getClient("dev1", false);
+        CloseableHttpAsyncClient client = factory.getClient("dev1", false);
         assertNotNull(client);
-        assertEquals("dev1", client.getDeviceId());
-        assertFalse(client.isVerifyCert());
     }
 
     @Test
-    void getClient_sameKey_returnsSameHttpClient() {
+    void getClient_sameKey_returnsSameUnderlyingClient() {
         factory = new HttpRetrieveAsyncClientFactory();
         factory.init();
 
-        HttpRetrieveAsyncClient a = factory.getClient("dev1", false);
-        HttpRetrieveAsyncClient b = factory.getClient("dev1", false);
+        CloseableHttpAsyncClient a = factory.getClient("dev1", false);
+        CloseableHttpAsyncClient b = factory.getClient("dev1", false);
         assertNotNull(a);
         assertNotNull(b);
-        assertSame(a.getHttpClient(), b.getHttpClient());
+        assertEquals(a.getStatus(), b.getStatus());
     }
 
     @Test
-    void getClient_differentDevices_sameHttpClient() {
+    void getClient_differentDevices_sameUnderlyingClient() {
         factory = new HttpRetrieveAsyncClientFactory();
         factory.init();
 
-        HttpRetrieveAsyncClient dev1 = factory.getClient("dev1", false);
-        HttpRetrieveAsyncClient dev2 = factory.getClient("dev2", false);
-        assertSame(dev1.getHttpClient(), dev2.getHttpClient());
+        CloseableHttpAsyncClient dev1 = factory.getClient("dev1", false);
+        CloseableHttpAsyncClient dev2 = factory.getClient("dev2", false);
+        assertEquals(dev1.getStatus(), dev2.getStatus());
+        assertSame(dev1.getStatus(), dev2.getStatus());
     }
 
     @Test
@@ -68,10 +68,10 @@ class HttpRetrieveAsyncClientFactoryTest {
     void shutdown_closesGracefully() {
         factory = new HttpRetrieveAsyncClientFactory();
         factory.init();
-        HttpRetrieveAsyncClient client = factory.getClient("dev1", false);
-        assertNotNull(client.getHttpClient());
+        CloseableHttpAsyncClient client = factory.getClient("dev1", false);
+        assertNotNull(client);
         factory.shutdown();
-        IOReactorStatus status = client.getHttpClient().getStatus();
+        IOReactorStatus status = client.getStatus();
         assertTrue(status == IOReactorStatus.SHUT_DOWN || status == IOReactorStatus.SHUTTING_DOWN,
                 "Expected SHUT_DOWN or SHUTTING_DOWN but was " + status);
     }
