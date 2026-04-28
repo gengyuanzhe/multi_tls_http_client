@@ -3,86 +3,87 @@ package uds.osc.retrieve.client;
 import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
 import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.concurrent.FutureCallback;
-import org.apache.hc.core5.http.HttpRequest;
-import org.apache.hc.core5.http.nio.AsyncEntityProducer;
+import org.apache.hc.core5.function.Supplier;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.nio.AsyncPushConsumer;
 import org.apache.hc.core5.http.nio.AsyncRequestProducer;
 import org.apache.hc.core5.http.nio.AsyncResponseConsumer;
-import org.apache.hc.core5.http.nio.support.BasicRequestProducer;
+import org.apache.hc.core5.http.nio.HandlerFactory;
 import org.apache.hc.core5.http.protocol.HttpContext;
+import org.apache.hc.core5.io.CloseMode;
+import org.apache.hc.core5.reactor.IOReactorStatus;
+import org.apache.hc.core5.util.TimeValue;
 
-import java.io.Closeable;
-import java.io.IOException;
+import java.util.concurrent.Future;
 
-public class HttpRetrieveAsyncClient implements Closeable {
+public class HttpRetrieveAsyncClient extends CloseableHttpAsyncClient {
 
     private static final String CTX_DEVICE_ID = DeviceAwareConnectionOperator.CTX_DEVICE_ID;
     private static final String CTX_VERIFY_CERT = DeviceAwareConnectionOperator.CTX_VERIFY_CERT;
 
     private final String deviceId;
     private final boolean verifyCert;
-    private final CloseableHttpAsyncClient httpClient;
+    private final CloseableHttpAsyncClient delegate;
 
-    public HttpRetrieveAsyncClient(String deviceId, boolean verifyCert, CloseableHttpAsyncClient httpClient) {
+    public HttpRetrieveAsyncClient(String deviceId, boolean verifyCert, CloseableHttpAsyncClient delegate) {
         this.deviceId = deviceId;
         this.verifyCert = verifyCert;
-        this.httpClient = httpClient;
-    }
-
-    public CloseableHttpAsyncClient getHttpClient() {
-        return httpClient;
-    }
-
-    public <T> void execute(HttpRequest request, AsyncResponseConsumer<T> responseConsumer,
-                            FutureCallback<T> callback) {
-        HttpClientContext context = createHttpContext();
-        AsyncRequestProducer requestProducer = new BasicRequestProducer(request, null);
-        httpClient.execute(requestProducer, responseConsumer, context, callback);
-    }
-
-    public <T> void execute(HttpRequest request, AsyncEntityProducer entityProducer,
-                            AsyncResponseConsumer<T> responseConsumer,
-                            FutureCallback<T> callback) {
-        HttpClientContext context = createHttpContext();
-        AsyncRequestProducer requestProducer = new BasicRequestProducer(request, entityProducer);
-        httpClient.execute(requestProducer, responseConsumer, context, callback);
-    }
-
-    public <T> void execute(AsyncRequestProducer requestProducer, AsyncResponseConsumer<T> responseConsumer,
-                            FutureCallback<T> callback) {
-        HttpClientContext context = createHttpContext();
-        httpClient.execute(requestProducer, responseConsumer, context, callback);
-    }
-
-    public <T> void execute(AsyncRequestProducer requestProducer, AsyncResponseConsumer<T> responseConsumer,
-                            HttpContext context, FutureCallback<T> callback) {
-        injectDeviceContext(context);
-        httpClient.execute(requestProducer, responseConsumer, context, callback);
-    }
-
-    private HttpClientContext createHttpContext() {
-        HttpClientContext context = HttpClientContext.create();
-        context.setAttribute(CTX_DEVICE_ID, deviceId);
-        context.setAttribute(CTX_VERIFY_CERT, verifyCert);
-        return context;
-    }
-
-    private void injectDeviceContext(HttpContext context) {
-        if (context != null) {
-            context.setAttribute(CTX_DEVICE_ID, deviceId);
-            context.setAttribute(CTX_VERIFY_CERT, verifyCert);
-        }
-    }
-
-    public String getDeviceId() {
-        return deviceId;
-    }
-
-    public boolean isVerifyCert() {
-        return verifyCert;
+        this.delegate = delegate;
     }
 
     @Override
-    public void close() throws IOException {
+    protected <T> Future<T> doExecute(HttpHost target, AsyncRequestProducer requestProducer,
+                                       AsyncResponseConsumer<T> responseConsumer,
+                                       HandlerFactory<AsyncPushConsumer> pushHandlerFactory,
+                                       HttpContext context, FutureCallback<T> callback) {
+        HttpContext effectiveContext = context;
+        if (context instanceof HttpClientContext) {
+            context.setAttribute(CTX_DEVICE_ID, deviceId);
+            context.setAttribute(CTX_VERIFY_CERT, verifyCert);
+        } else {
+            HttpClientContext clientContext = context != null
+                    ? HttpClientContext.adapt(context)
+                    : HttpClientContext.create();
+            clientContext.setAttribute(CTX_DEVICE_ID, deviceId);
+            clientContext.setAttribute(CTX_VERIFY_CERT, verifyCert);
+            effectiveContext = clientContext;
+        }
+        return delegate.execute(target, requestProducer, responseConsumer,
+                pushHandlerFactory, effectiveContext, callback);
+    }
+
+    @Override
+    public void start() {
+        delegate.start();
+    }
+
+    @Override
+    public IOReactorStatus getStatus() {
+        return delegate.getStatus();
+    }
+
+    @Override
+    public void awaitShutdown(TimeValue waitTime) throws InterruptedException {
+        delegate.awaitShutdown(waitTime);
+    }
+
+    @Override
+    public void initiateShutdown() {
+        delegate.initiateShutdown();
+    }
+
+    @Override
+    public void register(String hostname, String uriPattern, Supplier<AsyncPushConsumer> supplier) {
+        delegate.register(hostname, uriPattern, supplier);
+    }
+
+    @Override
+    public void close(CloseMode closeMode) {
+        // Lifecycle managed by HttpRetrieveAsyncClientFactory
+    }
+
+    @Override
+    public void close() {
         // Lifecycle managed by HttpRetrieveAsyncClientFactory
     }
 }
