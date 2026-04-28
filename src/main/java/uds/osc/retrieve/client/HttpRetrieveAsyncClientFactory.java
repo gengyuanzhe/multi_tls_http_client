@@ -72,7 +72,7 @@ public class HttpRetrieveAsyncClientFactory {
         LOGGER.info("HttpRetrieveAsyncClientFactory initialized with shared IOReactor");
     }
 
-    public HttpRetrieveAsyncClient getClient(String deviceId, boolean isVerifyCert) {
+    public CloseableHttpAsyncClient getClient(String deviceId, boolean isVerifyCert) {
         CloseableHttpAsyncClient client = httpClient;
         if (client == null || !initialized) {
             throw new IllegalStateException("Factory not initialized. Call init() first.");
