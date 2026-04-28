@@ -1,11 +1,10 @@
 package uds.osc.retrieve.client;
 
-import com.sun.net.httpserver.HttpsServer;
+import org.apache.hc.client5.http.async.methods.SimpleHttpRequest;
 import org.apache.hc.client5.http.async.methods.SimpleHttpResponse;
 import org.apache.hc.client5.http.async.methods.SimpleHttpRequests;
-import org.apache.hc.client5.http.async.methods.SimpleResponseConsumer;
-import org.apache.hc.core5.concurrent.FutureCallback;
-import org.apache.hc.client5.http.async.methods.SimpleHttpRequest;
+import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
+import com.sun.net.httpserver.HttpsServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -88,21 +87,21 @@ class TlsRoutingIntegrationTest {
 
     @Test
     void verifyCertTrue_matchingCert_succeeds() throws Exception {
-        HttpRetrieveAsyncClient client = factory.getClient("trusted", true);
+        CloseableHttpAsyncClient client = factory.getClient("trusted", true);
         SimpleHttpResponse response = executeRequest(client, "https://127.0.0.1:" + port + "/");
         assertEquals(200, response.getCode());
     }
 
     @Test
     void verifyCertFalse_trustAll_succeeds() throws Exception {
-        HttpRetrieveAsyncClient client = factory.getClient("trusted", false);
+        CloseableHttpAsyncClient client = factory.getClient("trusted", false);
         SimpleHttpResponse response = executeRequest(client, "https://127.0.0.1:" + port + "/");
         assertEquals(200, response.getCode());
     }
 
     @Test
     void verifyCertTrue_wrongCert_handshakeFails() throws Exception {
-        HttpRetrieveAsyncClient client = factory.getClient("untrusted", true);
+        CloseableHttpAsyncClient client = factory.getClient("untrusted", true);
         CompletableFuture<SimpleHttpResponse> future = executeRequestAsync(
                 client, "https://127.0.0.1:" + port + "/");
 
@@ -113,15 +112,15 @@ class TlsRoutingIntegrationTest {
                         + ": " + ex.getCause().getMessage());
     }
 
-    private SimpleHttpResponse executeRequest(HttpRetrieveAsyncClient client, String url) throws Exception {
+    private SimpleHttpResponse executeRequest(CloseableHttpAsyncClient client, String url) throws Exception {
         return executeRequestAsync(client, url).get(10, TimeUnit.SECONDS);
     }
 
     private CompletableFuture<SimpleHttpResponse> executeRequestAsync(
-            HttpRetrieveAsyncClient client, String url) {
+            CloseableHttpAsyncClient client, String url) {
         CompletableFuture<SimpleHttpResponse> future = new CompletableFuture<>();
         SimpleHttpRequest request = SimpleHttpRequests.get(URI.create(url));
-        client.execute(request, SimpleResponseConsumer.create(), new FutureCallback<>() {
+        client.execute(request, new org.apache.hc.core5.concurrent.FutureCallback<>() {
             @Override
             public void completed(SimpleHttpResponse result) {
                 future.complete(result);
