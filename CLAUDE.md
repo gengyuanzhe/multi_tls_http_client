@@ -12,7 +12,7 @@ Single `CloseableHttpAsyncClient` with a custom `AsyncClientConnectionOperator` 
 
 ```
 HttpRetrieveAsyncClientFactory  -- owns the shared CloseableHttpAsyncClient
-  └─ HttpRetrieveAsyncClient    -- lightweight per-device wrapper, injects context
+  └─ HttpRetrieveAsyncClient    -- extends CloseableHttpAsyncClient, injects device context via doExecute()
   └─ DeviceAwareConnectionOperator  -- intercepts TLS, selects per-device TlsStrategy
   └─ SSLContextFactory / DeviceKey  -- SSL context creation and cache key
 ```
@@ -24,6 +24,7 @@ HttpRetrieveAsyncClientFactory  -- owns the shared CloseableHttpAsyncClient
 - **`PoolingAsyncClientConnectionManagerBuilder.setSchemePortResolver/setDnsResolver` are `final`** — `DeviceAwareConnMgrBuilder` provides `withSchemePortResolver()/withDnsResolver()` as alternatives.
 - **`init()` and `shutdown()` are `synchronized`** — lifecycle methods are thread-safe. `getClient()` reads `httpClient` into a local variable for safe concurrent access.
 - **SSLContext creation happens outside `computeIfAbsent`** — avoids side-effecting lambdas and ensures exceptions don't corrupt the cache.
+- **`HttpRetrieveAsyncClient` extends `CloseableHttpAsyncClient`** — overrides `doExecute()` to inject device context, all other abstract methods delegate to the shared client. `getClient()` returns `CloseableHttpAsyncClient`. Lifecycle methods (`close()`, `close(CloseMode)`) are no-ops since the factory manages the shared client.
 
 ## Package Structure
 
@@ -33,7 +34,7 @@ uds.osc.retrieve.client/
 ├── SSLContextFactory.java                  — createTrustAllSSLContext / createDeviceSSLContext
 ├── DeviceAwareConnectionOperator.java      — core: intercepts TLS with per-device strategy
 ├── DeviceAwareConnMgrBuilder.java          — builder hook for custom operator injection
-├── HttpRetrieveAsyncClient.java            — wrapper, injects device context per request
+├── HttpRetrieveAsyncClient.java            — extends CloseableHttpAsyncClient, injects device context via doExecute()
 └── HttpRetrieveAsyncClientFactory.java     — entry point, shared client lifecycle
 ```
 
@@ -69,7 +70,7 @@ All classes reference these constants, never raw strings.
 
 ```bash
 mvn compile          # compile only
-mvn test             # run all tests (15 tests)
+mvn test             # run all tests (23 tests)
 mvn test -Dtest=HttpRetrieveAsyncClientFactoryTest  # factory tests only
 ```
 
